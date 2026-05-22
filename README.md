@@ -1,6 +1,6 @@
-# iClips Public API — Módulo Financeiro
+# iClips Public API
 
-Documentação de referência para integração com os endpoints financeiros da iClips Public API.
+Documentação de referência para integração com a iClips Public API.
 
 **Base URL:** `https://public-api.iclips.com.br`
 
@@ -12,11 +12,26 @@ Documentação de referência para integração com os endpoints financeiros da 
 - [Formato das respostas](#formato-das-respostas)
 - [Erros](#erros)
 - [Endpoints](#endpoints)
+  - **Financeiro**
   - [GET /api/v1/financial/accounts — Listar contas bancárias](#1-get-apiv1financialaccounts)
   - [GET /api/v1/financial/entries — Listar lançamentos](#2-get-apiv1financialentries)
   - [GET /api/v1/financial/entries/{id} — Detalhe do lançamento](#3-get-apiv1financialentriesid)
   - [GET /api/v1/financial/invoices — Listar notas fiscais](#4-get-apiv1financialinvoices)
   - [GET /api/v1/financial/invoices/{id} — Detalhe da nota fiscal](#5-get-apiv1financialinvoicesid)
+  - **Projetos e Peças**
+  - [POST /api/v1/jobs — Criar projeto (Job)](#6-post-apiv1jobs)
+  - [PUT /api/v1/jobs/{id} — Atualizar projeto (Job)](#7-put-apiv1jobsid)
+  - [DELETE /api/v1/jobs/{id} — Excluir projeto (Job)](#8-delete-apiv1jobsid)
+  - [GET /api/v1/pieces — Listar peças](#9-get-apiv1pieces)
+  - [GET /api/v1/pieces/{id} — Detalhe da peça](#10-get-apiv1piecesid)
+  - [POST /api/v1/pieces — Criar peça](#11-post-apiv1pieces)
+  - [PUT /api/v1/pieces/{id} — Atualizar peça](#12-put-apiv1piecesid)
+  - [PATCH /api/v1/pieces/{id}/checklist — Marcar item do checklist](#13-patch-apiv1piecesidchecklist)
+  - [DELETE /api/v1/pieces/{id} — Excluir peça](#14-delete-apiv1piecesid)
+  - [GET /api/v1/workflow-templates — Listar workflow templates](#15-get-apiv1workflow-templates)
+  - [GET /api/v1/workflow-templates/{id} — Detalhe do workflow template](#16-get-apiv1workflow-templatesid)
+  - [GET /api/v1/piece-categories — Listar categorias de peça](#17-get-apiv1piece-categories)
+  - [GET /api/v1/piece-categories/dropdown — Categorias para dropdown](#18-get-apiv1piece-categoriesdropdown)
 - [Paginação](#paginação)
 - [Limites e boas práticas](#limites-e-boas-práticas)
 
@@ -704,11 +719,492 @@ curl -X GET "https://public-api.iclips.com.br/api/v1/financial/invoices/310" \
 
 ---
 
+### 6. POST /api/v1/jobs
+
+Cria um novo Job (Projeto) no iClips.
+
+#### Headers
+
+| Header         | Obrigatório | Descrição          |
+|----------------|-------------|--------------------|
+| `X-Api-Key`    | Sim         | Chave da agência   |
+| `Content-Type` | Sim         | `application/json` |
+
+#### Exemplo de requisição
+
+```bash
+curl -X POST "https://public-api.iclips.com.br/api/v1/jobs" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Campanha Verão 2025",
+    "clienteId": 42,
+    "status": 6,
+    "entradaDate": "2025-06-01",
+    "conclusaoDate": "2025-07-31"
+  }'
+```
+
+#### Campos do Request Body
+
+| Campo            | Tipo           | Obrigatório | Descrição                                                               |
+|------------------|----------------|-------------|-------------------------------------------------------------------------|
+| `titulo`         | string         | **Sim**     | Título do job. Máx 100 caracteres.                                      |
+| `clienteId`      | integer / null | Cond.*      | ID do cliente. Mutuamente exclusivo com `grupoClienteId`.               |
+| `grupoClienteId` | integer / null | Cond.*      | ID do grupo de cliente. Mutuamente exclusivo com `clienteId`.           |
+| `entradaDate`    | date / null    | Não         | Data de entrada (`YYYY-MM-DD`). Deve ser ≤ `conclusaoDate`.             |
+| `aprovacaoDate`  | date / null    | Não         | Data de aprovação (`YYYY-MM-DD`).                                       |
+| `conclusaoDate`  | date / null    | Não         | Data de conclusão (`YYYY-MM-DD`).                                       |
+| `status`         | integer        | **Sim**     | Código do status (ver tabela abaixo).                                   |
+| `prioridade`     | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                                               |
+| `servico`        | string / null  | Não         | Nome do serviço.                                                        |
+| `campanha`       | string / null  | Não         | Nome da campanha vinculada.                                             |
+| `descricao`      | string / null  | Não         | Descrição do job.                                                       |
+| `briefing`       | string / null  | Não         | Texto de briefing.                                                      |
+| `verba`          | decimal / null | Não         | Verba disponível.                                                       |
+| `idVerba`        | integer / null | Não         | ID da verba vinculada.                                                  |
+| `idFeeMensal`    | integer / null | Não         | ID do fee mensal vinculado.                                             |
+| `modeloIds`      | integer[]      | Não         | IDs dos modelos de job para geração automática de peças/tarefas.        |
+| `pecaIds`        | integer[]      | Não         | IDs de peças adicionais.                                                |
+| `tarefas`        | object[]       | Não         | Tarefas manuais adicionais.                                             |
+
+*`clienteId` e `grupoClienteId` são mutuamente exclusivos; exatamente um deve ser informado.*
+
+#### Valores de `status`
+
+| Código | Nome                 |
+|--------|----------------------|
+| `1`    | Proposta Comercial   |
+| `2`    | Concorrência         |
+| `3`    | Risco                |
+| `5`    | Aguardando Aprovação |
+| `6`    | Autorizado           |
+| `7`    | Finalizado           |
+| `8`    | Cancelado            |
+| `9`    | Aberto pelo Cliente  |
+| `10`   | Pré Produção         |
+| `11`   | Stand By             |
+
+#### Resposta — 201 Created
+
+```json
+{
+  "jobId": 1234,
+  "titulo": "Campanha Verão 2025",
+  "sigla": "JOB-1234",
+  "status": 6,
+  "totalPecas": 0,
+  "totalTarefas": 0
+}
+```
+
+| Campo          | Tipo    | Descrição                              |
+|----------------|---------|----------------------------------------|
+| `jobId`        | integer | ID do job criado                       |
+| `titulo`       | string  | Título do job                          |
+| `sigla`        | string  | Sigla gerada automaticamente           |
+| `status`       | integer | Código do status                       |
+| `totalPecas`   | integer | Total de peças criadas                 |
+| `totalTarefas` | integer | Total de tarefas criadas               |
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `titulo` vazio, `status` inválido, `clienteId` e `grupoClienteId` simultâneos |
+| 401  | API Key ausente ou inválida |
+
+---
+
+### 7. PUT /api/v1/jobs/{id}
+
+Atualiza um Job (Projeto) existente no iClips.
+
+#### Parâmetros de rota
+
+| Parâmetro | Tipo    | Obrigatório | Descrição            |
+|-----------|---------|-------------|----------------------|
+| `id`      | integer | **Sim**     | Identificador do job |
+
+#### Exemplo de requisição
+
+```bash
+curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Campanha Verão 2025 — Revisado",
+    "clienteId": 42,
+    "status": 7
+  }'
+```
+
+#### Campos do Request Body
+
+Mesmos campos do POST, com as seguintes observações:
+
+| Campo            | Tipo           | Obrigatório | Descrição                                           |
+|------------------|----------------|-------------|-----------------------------------------------------|
+| `titulo`         | string         | **Sim**     | Título do job. Máx 100 caracteres.                  |
+| `status`         | integer        | **Sim**     | Código do status (mesmos valores do POST).          |
+| `funcionarioId`  | integer / null | Não         | ID do funcionário responsável.                      |
+| `auxiliarId`     | integer / null | Não         | ID do funcionário auxiliar.                         |
+
+#### Resposta — 200 OK
+
+```json
+{ "success": true, "data": { "jobId": 1234 } }
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `titulo` vazio, `status` inválido, datas inconsistentes, `clienteId` e `grupoClienteId` simultâneos |
+| 401  | API Key ausente ou inválida |
+| 404  | Job não encontrado |
+
+---
+
+### 8. DELETE /api/v1/jobs/{id}
+
+Exclui um Job (Projeto) do iClips.
+
+#### Parâmetros de rota
+
+| Parâmetro | Tipo    | Obrigatório | Descrição            |
+|-----------|---------|-------------|----------------------|
+| `id`      | integer | **Sim**     | Identificador do job |
+
+#### Exemplo de requisição
+
+```bash
+curl -X DELETE "https://public-api.iclips.com.br/api/v1/jobs/1234" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+```json
+{ "success": true }
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 401  | API Key ausente ou inválida |
+| 404  | Job não encontrado |
+
+---
+
+### 9. GET /api/v1/pieces
+
+Lista as peças do catálogo da agência com filtros opcionais e paginação.
+
+#### Parâmetros de filtro (query string)
+
+| Parâmetro           | Tipo    | Obrigatório | Descrição                                |
+|---------------------|---------|-------------|------------------------------------------|
+| `q`                 | string  | Não         | Busca textual por nome da peça.          |
+| `categoria`         | string  | Não         | Filtro por ID de categoria.              |
+| `status`            | string  | Não         | Filtro por status da peça.               |
+| `basedOnTemplateId` | string  | Não         | Filtro por ID do template base.          |
+| `page`              | integer | Não         | Número da página. Padrão: `1`.           |
+| `pageSize`          | integer | Não         | Itens por página. Padrão: `20`.          |
+
+#### Exemplo de requisição
+
+```bash
+curl -X GET "https://public-api.iclips.com.br/api/v1/pieces?q=Banner&page=1&pageSize=20" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+Lista paginada de peças com `id`, `name`, `description`, `exibirBool`, `digitalBool`, `categoriaIds` e metadados de paginação.
+
+---
+
+### 10. GET /api/v1/pieces/{id}
+
+Retorna o detalhe de uma peça, incluindo `workflowJson` e `checklistJson` completos.
+
+#### Exemplo de requisição
+
+```bash
+curl -X GET "https://public-api.iclips.com.br/api/v1/pieces/456" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 401  | API Key ausente ou inválida |
+| 404  | Peça não encontrada |
+
+---
+
+### 11. POST /api/v1/pieces
+
+Cria uma nova peça no catálogo do iClips.
+
+> Use `GET /api/v1/workflow-templates` para descobrir o `id` a usar em `basedOnTemplateId`.
+> Use `GET /api/v1/piece-categories` para descobrir os `id`s a usar em `categoriaIds`.
+
+#### Exemplo de requisição
+
+```bash
+curl -X POST "https://public-api.iclips.com.br/api/v1/pieces" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Banner Digital Full HD",
+    "description": "Banner para veiculação digital em formato Full HD",
+    "exibirBool": true,
+    "digitalBool": true,
+    "isFlexible": false,
+    "briefingCliente": "Informe as dimensões e o tema",
+    "pecaCliente": true,
+    "checklistJson": "{}",
+    "categoriaIds": [],
+    "basedOnTemplateId": 12
+  }'
+```
+
+#### Campos do Request Body
+
+| Campo                              | Tipo           | Obrigatório | Descrição                                                                       |
+|------------------------------------|----------------|-------------|---------------------------------------------------------------------------------|
+| `name`                             | string         | **Sim**     | Nome da peça. Máx 255 caracteres.                                               |
+| `description`                      | string / null  | Não         | Descrição da peça.                                                              |
+| `valorDecimal`                     | decimal / null | Não         | Valor base.                                                                     |
+| `valorSindraproCriacaoDecimal`     | decimal / null | Não         | Valor Sindrapro — Criação.                                                      |
+| `valorSindraproAdaptacaoDecimal`   | decimal / null | Não         | Valor Sindrapro — Adaptação.                                                    |
+| `valorSindraproFinalizacaoDecimal` | decimal / null | Não         | Valor Sindrapro — Finalização.                                                  |
+| `valorTotalDecimal`                | decimal / null | Não         | Valor total.                                                                    |
+| `exibirBool`                       | boolean        | Não         | Visível no catálogo. Padrão: `true`.                                            |
+| `digitalBool`                      | boolean / null | Não         | Peça digital. Padrão: `true`.                                                   |
+| `isFlexible`                       | boolean        | Não         | Peça flexível. Padrão: `false`.                                                 |
+| `briefingCliente`                  | string         | Não         | Instrução de briefing ao cliente. Padrão: `""`.                                 |
+| `pecaCliente`                      | boolean        | Não         | Padrão: `true`.                                                                 |
+| `idSindicato`                      | integer / null | Não         | ID do sindicato vinculado.                                                      |
+| `tempoMedio`                       | string / null  | Não         | Tempo médio de produção (ex: `"2h"`).                                           |
+| `instrucao`                        | string / null  | Não         | Instrução de produção.                                                          |
+| `checklistJson`                    | string         | Não         | JSON do checklist. Padrão: `"{}"`.                                              |
+| `categoriaIds`                     | integer[]      | Não         | IDs das categorias. Ver `GET /api/v1/piece-categories`.                         |
+| `basedOnTemplateId`                | integer / null | Cond.†      | ID do workflow template base. Ver `GET /api/v1/workflow-templates`.             |
+| `workflowJson`                     | string / null  | Cond.†      | JSON do workflow. Mutuamente exclusivo com `basedOnTemplateId`.                 |
+
+†Exatamente um entre `basedOnTemplateId` e `workflowJson` deve ser informado.
+
+#### Resposta — 201 Created
+
+```json
+{ "success": true, "data": 456 }
+```
+
+`data` = ID da peça criada.
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `name` vazio, ambos ou nenhum de `basedOnTemplateId` / `workflowJson` |
+| 401  | API Key ausente ou inválida |
+
+---
+
+### 12. PUT /api/v1/pieces/{id}
+
+Atualiza uma peça existente no catálogo.
+
+#### Exemplo de requisição
+
+```bash
+curl -X PUT "https://public-api.iclips.com.br/api/v1/pieces/456" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Banner Digital Full HD — v2",
+    "exibirBool": true,
+    "pecaCliente": true,
+    "workflowJson": "{}",
+    "checklistJson": "{}",
+    "categoriaIds": []
+  }'
+```
+
+#### Campos do Request Body
+
+Mesmos campos do POST, com as seguintes obrigatoriedades adicionais:
+
+| Campo           | Tipo   | Obrigatório | Descrição          |
+|-----------------|--------|-------------|--------------------|
+| `name`          | string | **Sim**     | Nome da peça.      |
+| `workflowJson`  | string | **Sim**     | JSON do workflow.  |
+| `checklistJson` | string | **Sim**     | JSON do checklist. |
+
+#### Resposta — 200 OK
+
+```json
+{ "success": true, "data": true }
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `name`, `workflowJson` ou `checklistJson` ausentes |
+| 401  | API Key ausente ou inválida |
+| 404  | Peça não encontrada |
+
+---
+
+### 13. PATCH /api/v1/pieces/{id}/checklist
+
+Marca ou desmarca um item do checklist de uma peça.
+
+#### Exemplo de requisição
+
+```bash
+curl -X PATCH "https://public-api.iclips.com.br/api/v1/pieces/456/checklist" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "itemId": "step-1",
+    "done": true
+  }'
+```
+
+#### Campos do Request Body
+
+| Campo    | Tipo    | Obrigatório | Descrição                               |
+|----------|---------|-------------|-----------------------------------------|
+| `itemId` | string  | **Sim**     | Identificador do item no checklist.     |
+| `done`   | boolean | **Sim**     | `true` = concluído, `false` = pendente. |
+
+#### Resposta — 200 OK
+
+```json
+{ "success": true, "data": true }
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `itemId` vazio |
+| 401  | API Key ausente ou inválida |
+| 404  | Peça não encontrada |
+
+---
+
+### 14. DELETE /api/v1/pieces/{id}
+
+Exclui (soft-delete) uma peça do catálogo.
+
+#### Exemplo de requisição
+
+```bash
+curl -X DELETE "https://public-api.iclips.com.br/api/v1/pieces/456" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+```json
+{ "success": true, "data": true }
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 401  | API Key ausente ou inválida |
+| 404  | Peça não encontrada |
+
+---
+
+### 15. GET /api/v1/workflow-templates
+
+Lista os workflow templates disponíveis na agência (sem o `workflowJson` completo).
+Use o `id` retornado no campo `basedOnTemplateId` ao criar peças via `POST /api/v1/pieces`.
+
+#### Exemplo de requisição
+
+```bash
+curl -X GET "https://public-api.iclips.com.br/api/v1/workflow-templates" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+Array de templates com `id`, `nome` e `descricao` (sem `workflowJson`).
+
+---
+
+### 16. GET /api/v1/workflow-templates/{id}
+
+Retorna o detalhe de um workflow template, incluindo o `workflowJson` completo.
+
+#### Exemplo de requisição
+
+```bash
+curl -X GET "https://public-api.iclips.com.br/api/v1/workflow-templates/12" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 401  | API Key ausente ou inválida |
+| 404  | Template não encontrado |
+
+---
+
+### 17. GET /api/v1/piece-categories
+
+Lista as categorias de peça disponíveis na agência.
+Use os `id`s retornados no campo `categoriaIds` ao criar ou atualizar peças.
+
+#### Exemplo de requisição
+
+```bash
+curl -X GET "https://public-api.iclips.com.br/api/v1/piece-categories" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+Array de categorias com `id` e `nome`.
+
+---
+
+### 18. GET /api/v1/piece-categories/dropdown
+
+Retorna categorias de peça em formato simplificado para uso em dropdowns.
+
+#### Exemplo de requisição
+
+```bash
+curl -X GET "https://public-api.iclips.com.br/api/v1/piece-categories/dropdown" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+Array simplificado de categorias com `id` e `nome`.
+
+---
+
 ## Paginação
 
-Os endpoints de listagem suportam paginação via parâmetros `limit` e `offset`.
+Os endpoints de listagem suportam paginação via parâmetros `limit` e `offset` (financeiro) ou `page` e `pageSize` (projetos/peças).
 
-**Exemplo — navegar por todas as páginas:**
+**Exemplo — navegar por todas as páginas (financeiro):**
 
 ```bash
 # Página 1
@@ -717,10 +1213,6 @@ curl "https://public-api.iclips.com.br/api/v1/financial/entries?from=2025-01-01&
 
 # Página 2
 curl "https://public-api.iclips.com.br/api/v1/financial/entries?from=2025-01-01&to=2025-03-31&limit=50&offset=50" \
-  -H "X-Api-Key: <SUA_API_KEY>"
-
-# Página 3
-curl "https://public-api.iclips.com.br/api/v1/financial/entries?from=2025-01-01&to=2025-03-31&limit=50&offset=100" \
   -H "X-Api-Key: <SUA_API_KEY>"
 ```
 
@@ -732,11 +1224,12 @@ Continue iterando enquanto `meta.hasMore` for `true` ou até que `meta.offset + 
 
 | Restrição                                                                              | Valor    |
 |----------------------------------------------------------------------------------------|----------|
-| Período máximo por consulta                                                            | 366 dias |
-| Itens por página (máximo)                                                              | 200      |
-| Itens por página (padrão)                                                              | 50       |
-| Os parâmetros `from` e `to` são **obrigatórios** em todos os endpoints de listagem (exceto `/accounts`) | —        |
+| Período máximo por consulta (financeiro)                                               | 366 dias |
+| Itens por página — financeiro (máximo)                                                 | 200      |
+| Itens por página — financeiro (padrão)                                                 | 50       |
+| Itens por página — peças (padrão)                                                      | 20       |
+| Os parâmetros `from` e `to` são **obrigatórios** em todos os endpoints financeiros de listagem (exceto `/accounts`) | —        |
 
 ---
 
-*Versão da API: v1 — Última atualização: Abril de 2026*
+*Versão da API: v1 — Última atualização: Maio de 2026*
