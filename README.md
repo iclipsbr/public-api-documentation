@@ -32,6 +32,8 @@ Documentação de referência para integração com a iClips Public API.
   - [GET /api/v1/workflow-templates/{id} — Detalhe do workflow template](#16-get-apiv1workflow-templatesid)
   - [GET /api/v1/piece-categories — Listar categorias de peça](#17-get-apiv1piece-categories)
   - [GET /api/v1/piece-categories/dropdown — Categorias para dropdown](#18-get-apiv1piece-categoriesdropdown)
+  - **Extração de Dados**
+  - [GET /api/v1/projetos — Extrair projetos com hierarquia completa](#19-get-apiv1projetos)
 - [Paginação](#paginação)
 - [Limites e boas práticas](#limites-e-boas-práticas)
 
@@ -1200,6 +1202,223 @@ Array simplificado de categorias com `id` e `nome`.
 
 ---
 
+### 19. GET /api/v1/projetos
+
+Retorna a hierarquia completa de Projetos (Jobs → Peças → Workflows → Atividades e Tarefas → Atividades) para o período informado. Ideal para integrações de BI, exportações e sincronização com ferramentas externas.
+
+> **Limite de taxa:** 10 requisições por minuto por API Key. Excedido, a API retorna **HTTP 429** com o header `Retry-After` indicando quantos segundos aguardar.
+
+#### Parâmetros de filtro (query string)
+
+| Parâmetro        | Tipo     | Obrigatório | Descrição                                                                             |
+|------------------|----------|-------------|---------------------------------------------------------------------------------------|
+| `dataInicio`     | datetime | **Sim**     | Data/hora de início do período (`YYYY-MM-DDTHH:mm:ss`). Filtra pela data de entrada do job. |
+| `dataFim`        | datetime | **Sim**     | Data/hora de fim do período. Máximo de 31 dias de diferença em relação a `dataInicio`. |
+| `idCliente`      | integer  | Não         | Filtra pelo ID do cliente vinculado ao job.                                           |
+| `idGrupoCliente` | integer  | Não         | Filtra pelo ID do grupo de clientes vinculado ao job.                                 |
+| `page`           | integer  | Não         | Número da página. Padrão: `1`. Mínimo: `1`.                                          |
+| `pageSize`       | integer  | Não         | Itens por página. Padrão: `20`. Máximo: `50`.                                        |
+
+#### Exemplo de requisição
+
+```bash
+curl -X GET "https://public-api.iclips.com.br/api/v1/projetos?dataInicio=2025-01-01T00:00:00&dataFim=2025-01-31T23:59:59&page=1&pageSize=20" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+```json
+{
+  "data": [
+    {
+      "idProjeto": 1234,
+      "nomeProjeto": "Campanha Verão 2025",
+      "statusProjeto": 6,
+      "verba": 50000.00,
+      "datas": {
+        "entrada": "2025-01-05T00:00:00",
+        "aprovacao": "2025-01-10T00:00:00",
+        "conclusaoEstimada": "2025-01-31T00:00:00",
+        "conclusao": null,
+        "alteracaoStatus": "2025-01-10T09:30:00"
+      },
+      "responsaveis": {
+        "principal": {
+          "id": 42,
+          "nome": "Ana Silva",
+          "cpf": "123.456.789-00"
+        },
+        "auxiliar": null
+      },
+      "cliente": {
+        "id": 10,
+        "nome": "Empresa Contratante S/A",
+        "cnpj": "11.222.333/0001-44"
+      },
+      "grupoCliente": null,
+      "pecas": [
+        {
+          "idJobPeca": 501,
+          "idPeca": 88,
+          "nomePeca": "Banner Full HD",
+          "tituloAtividade": "Produção Banner",
+          "status": 2,
+          "isFlexible": false,
+          "inicioPlanejado": "2025-01-12T00:00:00",
+          "fimPlanejado": "2025-01-20T00:00:00",
+          "workflows": [
+            {
+              "idWorkflow": 301,
+              "nome": "Criação",
+              "refacao": false,
+              "tempoEstimado": "04:00",
+              "inicio": "2025-01-12T08:00:00",
+              "fim": "2025-01-15T18:00:00",
+              "atividades": [
+                {
+                  "inicioPlay": "2025-01-13T09:00:00",
+                  "fimPlay": "2025-01-13T13:00:00",
+                  "statusConclusao": null,
+                  "tempoGasto": "04:00",
+                  "executor": {
+                    "id": 55,
+                    "nome": "Carlos Lima",
+                    "cpf": "987.654.321-00",
+                    "departamento": "Criação",
+                    "valorHora": 85.00
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      ],
+      "tarefas": [
+        {
+          "idTarefaJob": 701,
+          "tituloAtividade": "Aprovação cliente",
+          "tempoEstimado": "01:00",
+          "inicioPlanejado": "2025-01-25T00:00:00",
+          "fimPlanejado": "2025-01-26T00:00:00",
+          "atividades": []
+        }
+      ]
+    }
+  ],
+  "meta": {
+    "totalCount": 48,
+    "page": 1,
+    "pageSize": 20
+  }
+}
+```
+
+#### Campos da resposta
+
+**Projeto (`data[]`)**
+
+| Campo                          | Tipo            | Descrição                                                      |
+|--------------------------------|-----------------|----------------------------------------------------------------|
+| `idProjeto`                    | integer         | Identificador único do job/projeto                             |
+| `nomeProjeto`                  | string / null   | Título do projeto                                              |
+| `statusProjeto`                | integer / null  | Código do status (mesmos valores do `POST /api/v1/jobs`)       |
+| `verba`                        | decimal / null  | Verba disponível do projeto                                    |
+| `datas.entrada`                | datetime / null | Data de entrada do projeto                                     |
+| `datas.aprovacao`              | datetime / null | Data de aprovação                                              |
+| `datas.conclusaoEstimada`      | datetime / null | Data prevista de conclusão                                     |
+| `datas.conclusao`              | datetime / null | Data efetiva de conclusão (somente se `statusProjeto` = `7`)   |
+| `datas.alteracaoStatus`        | datetime / null | Data da última alteração de status                             |
+| `responsaveis.principal`       | object / null   | Responsável principal pelo projeto                             |
+| `responsaveis.auxiliar`        | object / null   | Responsável auxiliar pelo projeto                              |
+| `responsaveis.*.id`            | integer / null  | ID do funcionário                                              |
+| `responsaveis.*.nome`          | string / null   | Nome do funcionário                                            |
+| `responsaveis.*.cpf`           | string / null   | CPF do funcionário                                             |
+| `cliente`                      | object / null   | Cliente vinculado ao projeto                                   |
+| `grupoCliente`                 | object / null   | Grupo de clientes vinculado (mutuamente exclusivo com cliente)  |
+| `cliente.id` / `grupoCliente.id` | integer / null | ID do cliente ou grupo                                        |
+| `cliente.nome` / `grupoCliente.nome` | string / null | Nome do cliente ou grupo                                  |
+| `cliente.cnpj`                 | string / null   | CNPJ do cliente (apenas em `cliente`)                          |
+
+**Peça (`pecas[]`)**
+
+| Campo              | Tipo            | Descrição                                                  |
+|--------------------|-----------------|------------------------------------------------------------|
+| `idJobPeca`        | integer         | ID da instância da peça no job                             |
+| `idPeca`           | integer / null  | ID do catálogo de peças                                    |
+| `nomePeca`         | string / null   | Nome da peça                                               |
+| `tituloAtividade`  | string / null   | Título da atividade da peça                                |
+| `status`           | integer / null  | Status da peça no job                                      |
+| `isFlexible`       | boolean         | Indica se a peça é flexível                                |
+| `inicioPlanejado`  | datetime / null | Data de início planejada                                   |
+| `fimPlanejado`     | datetime / null | Data de fim planejada                                      |
+
+**Workflow (`pecas[].workflows[]`)**
+
+| Campo           | Tipo            | Descrição                                              |
+|-----------------|-----------------|--------------------------------------------------------|
+| `idWorkflow`    | integer         | ID do workflow na peça                                 |
+| `nome`          | string / null   | Nome da etapa de workflow                              |
+| `refacao`       | boolean         | Indica se é uma refação                                |
+| `tempoEstimado` | string / null   | Tempo estimado no formato `HH:mm`                      |
+| `inicio`        | datetime / null | Data de início do workflow                             |
+| `fim`           | datetime / null | Data de fim do workflow                                |
+
+**Atividade (`workflows[].atividades[]` e `tarefas[].atividades[]`)**
+
+| Campo            | Tipo            | Descrição                                              |
+|------------------|-----------------|--------------------------------------------------------|
+| `inicioPlay`     | datetime / null | Início do apontamento de hora                          |
+| `fimPlay`        | datetime / null | Fim do apontamento de hora                             |
+| `statusConclusao`| datetime / null | Data de conclusão, quando concluída                    |
+| `tempoGasto`     | string / null   | Tempo gasto no formato `HH:mm`                         |
+| `executor.id`    | integer / null  | ID do funcionário que executou                         |
+| `executor.nome`  | string / null   | Nome do executor                                       |
+| `executor.cpf`   | string / null   | CPF do executor                                        |
+| `executor.departamento` | string / null | Departamento do executor                          |
+| `executor.valorHora`    | decimal / null | Valor/hora do executor                           |
+
+**Tarefa (`tarefas[]`)**
+
+| Campo              | Tipo            | Descrição                                              |
+|--------------------|-----------------|--------------------------------------------------------|
+| `idTarefaJob`      | integer         | ID da tarefa no job                                    |
+| `tituloAtividade`  | string / null   | Título da tarefa                                       |
+| `tempoEstimado`    | string / null   | Tempo estimado no formato `HH:mm`                      |
+| `inicioPlanejado`  | datetime / null | Data de início planejada                               |
+| `fimPlanejado`     | datetime / null | Data de fim planejada                                  |
+| `atividades`       | array           | Apontamentos de hora realizados nesta tarefa           |
+
+**Meta (`meta`)**
+
+| Campo        | Tipo    | Descrição                                      |
+|--------------|---------|------------------------------------------------|
+| `totalCount` | integer | Total de projetos no período filtrado          |
+| `page`       | integer | Página atual                                   |
+| `pageSize`   | integer | Itens por página efetivamente aplicados        |
+
+#### Resposta — 400 Bad Request
+
+```json
+{
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "O intervalo de datas não pode exceder 31 dias.",
+    "details": [
+      { "field": "date_range", "issue": "exceeded" }
+    ]
+  }
+}
+```
+
+| HTTP | Cenário                                                                        |
+|------|--------------------------------------------------------------------------------|
+| 400  | `dataInicio` ou `dataFim` ausentes, `dataInicio` > `dataFim`, intervalo > 31 dias |
+| 401  | API Key ausente ou inválida                                                    |
+| 429  | Limite de taxa excedido (10 req/min). Header `Retry-After` indica segundos restantes. |
+
+---
+
 ## Paginação
 
 Os endpoints de listagem suportam paginação via parâmetros `limit` e `offset` (financeiro) ou `page` e `pageSize` (projetos/peças).
@@ -1229,7 +1448,11 @@ Continue iterando enquanto `meta.hasMore` for `true` ou até que `meta.offset + 
 | Itens por página — financeiro (padrão)                                                 | 50       |
 | Itens por página — peças (padrão)                                                      | 20       |
 | Os parâmetros `from` e `to` são **obrigatórios** em todos os endpoints financeiros de listagem (exceto `/accounts`) | —        |
+| Período máximo por consulta (projetos)                                                                               | 31 dias  |
+| Itens por página — projetos (máximo)                                                                                 | 50       |
+| Itens por página — projetos (padrão)                                                                                 | 20       |
+| Limite de taxa — projetos (`GET /api/v1/projetos`)                                                                   | 10 req/min |
 
 ---
 
-*Versão da API: v1 — Última atualização: Maio de 2026*
+*Versão da API: v1 — Última atualização: Junho de 2026*
