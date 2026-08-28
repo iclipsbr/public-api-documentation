@@ -743,7 +743,17 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs" \
     "clienteId": 42,
     "status": 6,
     "entradaDate": "2025-06-01",
-    "conclusaoDate": "2025-07-31"
+    "conclusaoDate": "2025-07-31",
+    "tarefasInput": [
+      {
+        "titulo": "Reunião de briefing",
+        "descricao": "Alinhar detalhes com o cliente",
+        "inicioDate": "2025-06-02",
+        "fimDate": "2025-06-02",
+        "prioridade": 1,
+        "ordemExibicao": 1
+      }
+    ]
   }'
 ```
 
@@ -766,11 +776,28 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs" \
 | `verba`          | decimal / null | Não         | Verba disponível.                                                       |
 | `idVerba`        | integer / null | Não         | ID da verba vinculada.                                                  |
 | `idFeeMensal`    | integer / null | Não         | ID do fee mensal vinculado.                                             |
+| `funcionarioId`  | integer / null | Não         | ID do funcionário responsável. Se omitido, usa o usuário resolvido pela API Key. |
+| `auxiliarId`     | integer / null | Não         | ID do funcionário auxiliar.                                             |
 | `modeloIds`      | integer[]      | Não         | IDs dos modelos de job para geração automática de peças/tarefas.        |
 | `pecaIds`        | integer[]      | Não         | IDs de peças adicionais.                                                |
-| `tarefas`        | object[]       | Não         | Tarefas manuais adicionais.                                             |
+| `tarefasInput`   | object[]       | Não         | Tarefas manuais adicionais (ver campos abaixo).                         |
 
 *`clienteId` e `grupoClienteId` são mutuamente exclusivos; exatamente um deve ser informado.*
+
+#### Campos de `tarefasInput[]`
+
+⚠️ Estes nomes são diferentes dos campos retornados por `GET /api/v1/projetos` (que usa
+`tituloAtividade`, `tempoEstimado`, `inicioPlanejado`, `fimPlanejado`) — aquele é o schema de
+**leitura**; o schema de **escrita** (criação) é este abaixo.
+
+| Campo           | Tipo           | Obrigatório | Descrição                                    |
+|-----------------|----------------|-------------|-----------------------------------------------|
+| `titulo`        | string         | **Sim**     | Título da tarefa. Máx 150 caracteres.          |
+| `descricao`     | string / null  | Não         | Descrição da tarefa.                           |
+| `inicioDate`    | date / null    | Não         | Data de início da tarefa (`YYYY-MM-DD`).       |
+| `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).          |
+| `prioridade`    | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                      |
+| `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.          |
 
 #### Valores de `status`
 
@@ -813,7 +840,7 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs" \
 
 | HTTP | Cenário |
 |------|---------|
-| 400  | `titulo` vazio, `status` inválido, `clienteId` e `grupoClienteId` simultâneos |
+| 400  | `titulo` vazio, `status` inválido, `clienteId` e `grupoClienteId` simultâneos, item de `tarefasInput[]` sem `titulo` |
 | 401  | API Key ausente ou inválida |
 
 ---
@@ -843,7 +870,9 @@ curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234" \
 
 #### Campos do Request Body
 
-Mesmos campos do POST, com as seguintes observações:
+Mesmos campos de metadado do POST: `titulo`, `clienteId`/`grupoClienteId`, `entradaDate`,
+`aprovacaoDate`, `conclusaoDate`, `status`, `prioridade`, `servico`, `campanha`, `descricao`,
+`briefing`, `verba`, `idVerba`, `idFeeMensal`, `funcionarioId`, `auxiliarId`.
 
 | Campo            | Tipo           | Obrigatório | Descrição                                           |
 |------------------|----------------|-------------|-----------------------------------------------------|
@@ -852,11 +881,26 @@ Mesmos campos do POST, com as seguintes observações:
 | `funcionarioId`  | integer / null | Não         | ID do funcionário responsável.                      |
 | `auxiliarId`     | integer / null | Não         | ID do funcionário auxiliar.                         |
 
+⚠️ **`modeloIds`, `pecaIds` e `tarefasInput` não são suportados neste endpoint.** Se enviados,
+são ignorados silenciosamente — a lista de peças e de tarefas do job não é alterada pelo PUT
+nesta versão da API.
+
 #### Resposta — 200 OK
 
 ```json
-{ "success": true, "data": { "jobId": 1234 } }
+{
+  "jobId": 1234,
+  "titulo": "Campanha Verão 2025 — Revisado",
+  "sigla": "JOB-1234",
+  "status": 7,
+  "totalPecas": 0,
+  "totalTarefas": 0
+}
 ```
+
+Mesmo formato de resposta do POST (ver tabela de campos na seção 6). `totalPecas` e
+`totalTarefas` refletem o que já existia no job antes do update — não são recalculados por
+este endpoint.
 
 #### Erros
 
