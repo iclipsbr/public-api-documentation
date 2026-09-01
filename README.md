@@ -22,18 +22,22 @@ Documentação de referência para integração com a iClips Public API.
   - [POST /api/v1/jobs — Criar projeto (Job)](#6-post-apiv1jobs)
   - [PUT /api/v1/jobs/{id} — Atualizar projeto (Job)](#7-put-apiv1jobsid)
   - [DELETE /api/v1/jobs/{id} — Excluir projeto (Job)](#8-delete-apiv1jobsid)
-  - [GET /api/v1/pieces — Listar peças](#9-get-apiv1pieces)
-  - [GET /api/v1/pieces/{id} — Detalhe da peça](#10-get-apiv1piecesid)
-  - [POST /api/v1/pieces — Criar peça](#11-post-apiv1pieces)
-  - [PUT /api/v1/pieces/{id} — Atualizar peça](#12-put-apiv1piecesid)
-  - [PATCH /api/v1/pieces/{id}/checklist — Marcar item do checklist](#13-patch-apiv1piecesidchecklist)
-  - [DELETE /api/v1/pieces/{id} — Excluir peça](#14-delete-apiv1piecesid)
-  - [GET /api/v1/workflow-templates — Listar workflow templates](#15-get-apiv1workflow-templates)
-  - [GET /api/v1/workflow-templates/{id} — Detalhe do workflow template](#16-get-apiv1workflow-templatesid)
-  - [GET /api/v1/piece-categories — Listar categorias de peça](#17-get-apiv1piece-categories)
-  - [GET /api/v1/piece-categories/dropdown — Categorias para dropdown](#18-get-apiv1piece-categoriesdropdown)
+  - [POST /api/v1/jobs/{id}/pecas — Vincular peça a um projeto](#9-post-apiv1jobsidpecas)
+  - [PUT /api/v1/jobs/{id}/pecas/{jobPecaId} — Atualizar peça de um projeto](#10-put-apiv1jobsidpecasjobpecaid)
+  - [POST /api/v1/jobs/{id}/tarefas — Criar tarefa em um projeto](#11-post-apiv1jobsidtarefas)
+  - [PUT /api/v1/jobs/{id}/tarefas/{tarefaId} — Atualizar tarefa de um projeto](#12-put-apiv1jobsidtarefastarefaid)
+  - [GET /api/v1/pieces — Listar peças](#13-get-apiv1pieces)
+  - [GET /api/v1/pieces/{id} — Detalhe da peça](#14-get-apiv1piecesid)
+  - [POST /api/v1/pieces — Criar peça](#15-post-apiv1pieces)
+  - [PUT /api/v1/pieces/{id} — Atualizar peça](#16-put-apiv1piecesid)
+  - [PATCH /api/v1/pieces/{id}/checklist — Marcar item do checklist](#17-patch-apiv1piecesidchecklist)
+  - [DELETE /api/v1/pieces/{id} — Excluir peça](#18-delete-apiv1piecesid)
+  - [GET /api/v1/workflow-templates — Listar workflow templates](#19-get-apiv1workflow-templates)
+  - [GET /api/v1/workflow-templates/{id} — Detalhe do workflow template](#20-get-apiv1workflow-templatesid)
+  - [GET /api/v1/piece-categories — Listar categorias de peça](#21-get-apiv1piece-categories)
+  - [GET /api/v1/piece-categories/dropdown — Categorias para dropdown](#22-get-apiv1piece-categoriesdropdown)
   - **Extração de Dados**
-  - [GET /api/v1/projetos — Extrair projetos com hierarquia completa](#19-get-apiv1projetos)
+  - [GET /api/v1/projetos — Extrair projetos com hierarquia completa](#23-get-apiv1projetos)
 - [Paginação](#paginação)
 - [Limites e boas práticas](#limites-e-boas-práticas)
 
@@ -944,7 +948,251 @@ curl -X DELETE "https://public-api.iclips.com.br/api/v1/jobs/1234" \
 
 ---
 
-### 9. GET /api/v1/pieces
+### 9. POST /api/v1/jobs/{id}/pecas
+
+Vincula uma peça do catálogo a um Job (Projeto) já existente.
+
+#### Parâmetros de rota
+
+| Parâmetro | Tipo    | Obrigatório | Descrição            |
+|-----------|---------|-------------|----------------------|
+| `id`      | integer | **Sim**     | Identificador do job |
+
+#### Exemplo de requisição
+
+```bash
+curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "pecaId": 5,
+    "titulo": "Banner Instagram",
+    "prioridade": 2
+  }'
+```
+
+#### Campos do Request Body
+
+| Campo        | Tipo           | Obrigatório | Descrição                                                      |
+|--------------|----------------|-------------|------------------------------------------------------------------|
+| `pecaId`     | integer        | **Sim**     | ID da peça no catálogo (ver `GET /api/v1/pieces`).                |
+| `titulo`     | string / null  | Não         | Título da peça no job. Se omitido, usa o nome da peça do catálogo. |
+| `descricao`  | string / null  | Não         | Descrição da peça no job. Se omitido, usa a instrução do catálogo. |
+| `prioridade` | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta. Padrão: Média.                          |
+
+#### Resposta — 201 Created
+
+```json
+{
+  "jobId": 1234,
+  "jobPecaId": 42,
+  "pecaId": 5,
+  "titulo": "Banner Instagram",
+  "status": 1
+}
+```
+
+| Campo       | Tipo    | Descrição                                                        |
+|-------------|---------|-------------------------------------------------------------------|
+| `jobId`     | integer | ID do job                                                          |
+| `jobPecaId` | integer | ID da peça vinculada ao job — **diferente** do `pecaId` do catálogo, use este id no `PUT` |
+| `pecaId`    | integer | ID da peça no catálogo                                             |
+| `titulo`    | string  | Título da peça no job                                              |
+| `status`    | integer | Código de status da peça no job                                    |
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `pecaId` ausente, peça já vinculada a este job |
+| 401  | API Key ausente ou inválida |
+| 404  | Job não encontrado, peça não encontrada no catálogo |
+
+---
+
+### 10. PUT /api/v1/jobs/{id}/pecas/{jobPecaId}
+
+Atualiza uma peça já vinculada a um Job (Projeto). Só os campos informados são alterados.
+
+#### Parâmetros de rota
+
+| Parâmetro   | Tipo    | Obrigatório | Descrição                                                |
+|-------------|---------|-------------|-----------------------------------------------------------|
+| `id`        | integer | **Sim**     | Identificador do job                                       |
+| `jobPecaId` | integer | **Sim**     | ID da peça vinculada ao job (retornado pelo `POST`, não é o id do catálogo) |
+
+#### Exemplo de requisição
+
+```bash
+curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas/42" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Banner Instagram — Revisado",
+    "prioridade": 3
+  }'
+```
+
+#### Campos do Request Body
+
+| Campo        | Tipo           | Obrigatório | Descrição                                |
+|--------------|----------------|-------------|--------------------------------------------|
+| `titulo`     | string / null  | Não         | Título da peça no job.                     |
+| `descricao`  | string / null  | Não         | Descrição da peça no job.                  |
+| `formato`    | string / null  | Não         | Formato da peça.                           |
+| `servico`    | string / null  | Não         | Nome do serviço.                           |
+| `prioridade` | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                  |
+
+⚠️ Nenhum campo é obrigatório aqui — envie só os que quer alterar; os demais permanecem
+como estavam.
+
+#### Resposta — 200 OK
+
+```json
+{
+  "jobId": 1234,
+  "jobPecaId": 42,
+  "pecaId": 5,
+  "titulo": "Banner Instagram — Revisado",
+  "status": 1
+}
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 401  | API Key ausente ou inválida |
+| 404  | Job não encontrado, ou `jobPecaId` não pertence a este job |
+
+---
+
+### 11. POST /api/v1/jobs/{id}/tarefas
+
+Cria uma tarefa manual vinculada a um Job (Projeto) já existente.
+
+#### Parâmetros de rota
+
+| Parâmetro | Tipo    | Obrigatório | Descrição            |
+|-----------|---------|-------------|----------------------|
+| `id`      | integer | **Sim**     | Identificador do job |
+
+#### Exemplo de requisição
+
+```bash
+curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/tarefas" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Reunião de briefing",
+    "descricao": "Alinhar detalhes com o cliente",
+    "inicioDate": "2025-06-02",
+    "fimDate": "2025-06-02",
+    "prioridade": 1,
+    "ordemExibicao": 1
+  }'
+```
+
+#### Campos do Request Body
+
+Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6):
+
+| Campo           | Tipo           | Obrigatório | Descrição                                    |
+|-----------------|----------------|-------------|-----------------------------------------------|
+| `titulo`        | string         | **Sim**     | Título da tarefa. Máx 150 caracteres.          |
+| `descricao`     | string / null  | Não         | Descrição da tarefa.                           |
+| `inicioDate`    | date / null    | Não         | Data de início da tarefa (`YYYY-MM-DD`).       |
+| `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).          |
+| `prioridade`    | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                      |
+| `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.          |
+
+#### Resposta — 201 Created
+
+```json
+{
+  "jobId": 1234,
+  "idTarefaJob": 701,
+  "titulo": "Reunião de briefing",
+  "status": 0
+}
+```
+
+| Campo         | Tipo    | Descrição             |
+|---------------|---------|------------------------|
+| `jobId`       | integer | ID do job              |
+| `idTarefaJob` | integer | ID da tarefa criada — use este id no `PUT` |
+| `titulo`      | string  | Título da tarefa       |
+| `status`      | integer | Código de status da tarefa |
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `titulo` vazio ou ausente |
+| 401  | API Key ausente ou inválida |
+| 404  | Job não encontrado |
+
+---
+
+### 12. PUT /api/v1/jobs/{id}/tarefas/{tarefaId}
+
+Atualiza uma tarefa já vinculada a um Job (Projeto). Só os campos informados são alterados.
+
+#### Parâmetros de rota
+
+| Parâmetro  | Tipo    | Obrigatório | Descrição                                          |
+|------------|---------|-------------|------------------------------------------------------|
+| `id`       | integer | **Sim**     | Identificador do job                                  |
+| `tarefaId` | integer | **Sim**     | ID da tarefa vinculada ao job (retornado pelo `POST`) |
+
+#### Exemplo de requisição
+
+```bash
+curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234/tarefas/701" \
+  -H "X-Api-Key: <SUA_API_KEY>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "titulo": "Reunião de briefing — Remarcada",
+    "inicioDate": "2025-06-05"
+  }'
+```
+
+#### Campos do Request Body
+
+| Campo           | Tipo           | Obrigatório | Descrição                                |
+|-----------------|----------------|-------------|---------------------------------------------|
+| `titulo`        | string / null  | Não         | Título da tarefa (se enviado, não pode ser vazio). |
+| `descricao`     | string / null  | Não         | Descrição da tarefa.                        |
+| `inicioDate`    | date / null    | Não         | Data de início da tarefa (`YYYY-MM-DD`).    |
+| `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).       |
+| `prioridade`    | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                   |
+| `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.       |
+
+⚠️ Nenhum campo é obrigatório aqui — envie só os que quer alterar; os demais permanecem
+como estavam.
+
+#### Resposta — 200 OK
+
+```json
+{
+  "jobId": 1234,
+  "idTarefaJob": 701,
+  "titulo": "Reunião de briefing — Remarcada",
+  "status": 0
+}
+```
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 400  | `titulo` enviado vazio |
+| 401  | API Key ausente ou inválida |
+| 404  | Job não encontrado, ou `tarefaId` não pertence a este job |
+
+---
+
+### 13. GET /api/v1/pieces
 
 Lista as peças do catálogo da agência com filtros opcionais e paginação.
 
@@ -972,7 +1220,7 @@ Lista paginada de peças com `id`, `name`, `description`, `exibirBool`, `digital
 
 ---
 
-### 10. GET /api/v1/pieces/{id}
+### 14. GET /api/v1/pieces/{id}
 
 Retorna o detalhe de uma peça, incluindo `workflowJson` e `checklistJson` completos.
 
@@ -992,7 +1240,7 @@ curl -X GET "https://public-api.iclips.com.br/api/v1/pieces/456" \
 
 ---
 
-### 11. POST /api/v1/pieces
+### 15. POST /api/v1/pieces
 
 Cria uma nova peça no catálogo do iClips.
 
@@ -1062,7 +1310,7 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/pieces" \
 
 ---
 
-### 12. PUT /api/v1/pieces/{id}
+### 16. PUT /api/v1/pieces/{id}
 
 Atualiza uma peça existente no catálogo.
 
@@ -1108,7 +1356,7 @@ Mesmos campos do POST, com as seguintes obrigatoriedades adicionais:
 
 ---
 
-### 13. PATCH /api/v1/pieces/{id}/checklist
+### 17. PATCH /api/v1/pieces/{id}/checklist
 
 Marca ou desmarca um item do checklist de uma peça.
 
@@ -1147,7 +1395,7 @@ curl -X PATCH "https://public-api.iclips.com.br/api/v1/pieces/456/checklist" \
 
 ---
 
-### 14. DELETE /api/v1/pieces/{id}
+### 18. DELETE /api/v1/pieces/{id}
 
 Exclui (soft-delete) uma peça do catálogo.
 
@@ -1173,7 +1421,7 @@ curl -X DELETE "https://public-api.iclips.com.br/api/v1/pieces/456" \
 
 ---
 
-### 15. GET /api/v1/workflow-templates
+### 19. GET /api/v1/workflow-templates
 
 Lista os workflow templates disponíveis na agência (sem o `workflowJson` completo).
 Use o `id` retornado no campo `basedOnTemplateId` ao criar peças via `POST /api/v1/pieces`.
@@ -1191,7 +1439,7 @@ Array de templates com `id`, `nome` e `descricao` (sem `workflowJson`).
 
 ---
 
-### 16. GET /api/v1/workflow-templates/{id}
+### 20. GET /api/v1/workflow-templates/{id}
 
 Retorna o detalhe de um workflow template, incluindo o `workflowJson` completo.
 
@@ -1211,7 +1459,7 @@ curl -X GET "https://public-api.iclips.com.br/api/v1/workflow-templates/12" \
 
 ---
 
-### 17. GET /api/v1/piece-categories
+### 21. GET /api/v1/piece-categories
 
 Lista as categorias de peça disponíveis na agência.
 Use os `id`s retornados no campo `categoriaIds` ao criar ou atualizar peças.
@@ -1229,7 +1477,7 @@ Array de categorias com `id` e `nome`.
 
 ---
 
-### 18. GET /api/v1/piece-categories/dropdown
+### 22. GET /api/v1/piece-categories/dropdown
 
 Retorna categorias de peça em formato simplificado para uso em dropdowns.
 
@@ -1246,7 +1494,7 @@ Array simplificado de categorias com `id` e `nome`.
 
 ---
 
-### 19. GET /api/v1/projetos
+### 23. GET /api/v1/projetos
 
 Retorna a hierarquia completa de Projetos (Jobs → Peças → Workflows → Atividades e Tarefas → Atividades) para o período informado. Ideal para integrações de BI, exportações e sincronização com ferramentas externas.
 
