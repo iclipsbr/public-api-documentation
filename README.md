@@ -237,8 +237,9 @@ Lista os lançamentos financeiros da agência com suporte a filtros e paginaçã
 
 | Parâmetro        | Tipo    | Obrigatório | Descrição                                                                                     |
 |------------------|---------|-------------|-----------------------------------------------------------------------------------------------|
-| `from`           | date    | **Sim**     | Data de início do período (`YYYY-MM-DD`). Filtra pelo campo `entryDate`.                      |
+| `from`           | date    | **Sim**     | Data de início do período (`YYYY-MM-DD`). Coluna filtrada definida por `date_field`.          |
 | `to`             | date    | **Sim**     | Data de fim do período (`YYYY-MM-DD`). Máximo de 366 dias de diferença em relação a `from`.   |
+| `date_field`     | string  | Não         | Qual data o `from`/`to` filtra. `entry` (padrão) = `entryDate` (lançamento/**vencimento** para `A Pagar`/`A Receber`); `payment` = `paymentDate` (data da baixa — só retorna lançamentos já baixados); `competence` = `competenceDate`. |
 | `type`           | string  | Não         | Tipo do lançamento. Valores aceitos: `Entrada`, `Saída`, `A Receber`, `A Pagar`               |
 | `account_id`     | integer | Não         | Filtra pelo ID da conta bancária (obtido via `/accounts`)                                     |
 | `category_id`    | integer | Não         | Filtra pelo ID da categoria do lançamento                                                     |
@@ -247,6 +248,8 @@ Lista os lançamentos financeiros da agência com suporte a filtros e paginaçã
 | `job_id`         | integer | Não         | Filtra pelo ID do job vinculado ao lançamento                                                 |
 | `limit`          | integer | Não         | Registros por página. Padrão: `50`. Mín: `1`. Máx: `200`.                                    |
 | `offset`         | integer | Não         | Deslocamento para paginação. Padrão: `0`.                                                     |
+
+> **Contas a vencer no mês:** para `A Pagar`/`A Receber`, o vencimento é o `entryDate`. Use `?type=A Pagar&from=<1º dia>&to=<último dia>` (com `date_field=entry`, o padrão) para listar o que vence no período — cada parcela é um lançamento próprio com seu vencimento em `entryDate`.
 
 **Valores válidos para `dre_indicator`:**
 
@@ -285,6 +288,7 @@ curl -X GET "https://public-api.iclips.com.br/api/v1/financial/entries?from=2025
       "type": "Saída",
       "entryDate": "2025-02-10T00:00:00",
       "dueDate": "2025-02-10T00:00:00",
+      "paymentDate": "2025-02-10T00:00:00",
       "competenceDate": "2025-02-01T00:00:00",
       "amount": 3500.00,
       "discount": null,
@@ -350,8 +354,9 @@ curl -X GET "https://public-api.iclips.com.br/api/v1/financial/entries?from=2025
 | `title`                    | string / null   | Título do lançamento                                                            |
 | `description`              | string / null   | Descrição detalhada                                                             |
 | `type`                     | string          | Tipo: `Entrada`, `Saída`, `A Receber`, `A Pagar`                                |
-| `entryDate`                | datetime / null | Data de realização do lançamento                                                |
-| `dueDate`                  | datetime / null | Data de vencimento/pagamento                                                    |
+| `entryDate`                | datetime / null | Data do lançamento. Para `A Pagar`/`A Receber` **é o vencimento** da parcela.    |
+| `dueDate`                  | datetime / null | **Deprecated** — alias de `paymentDate` (mantido por retrocompatibilidade). `null` enquanto o lançamento está em aberto. |
+| `paymentDate`              | datetime / null | Data da baixa (pagamento efetivo). `null` enquanto em aberto.                    |
 | `competenceDate`           | datetime / null | Data de competência contábil                                                    |
 | `amount`                   | decimal         | Valor bruto do lançamento                                                       |
 | `discount`                 | decimal / null  | Desconto aplicado                                                               |
@@ -430,6 +435,7 @@ curl -X GET "https://public-api.iclips.com.br/api/v1/financial/entries/4801" \
     "type": "Saída",
     "entryDate": "2025-02-10T00:00:00",
     "dueDate": "2025-02-10T00:00:00",
+    "paymentDate": "2025-02-10T00:00:00",
     "competenceDate": "2025-02-01T00:00:00",
     "amount": 3500.00,
     "discount": null,
