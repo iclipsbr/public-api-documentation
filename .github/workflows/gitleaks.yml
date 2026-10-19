@@ -1,0 +1,7 @@
+name: gitleaks
+
+on: pull_request
+
+jobs:
+  gitleaks:
+    uses: iclipsbr/guardrails/.github/workflows/gitleaks.yml@master
