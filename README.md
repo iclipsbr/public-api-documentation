@@ -778,7 +778,7 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs" \
 | `aprovacaoDate`  | date / null    | Não         | Data de aprovação (`YYYY-MM-DD`).                                       |
 | `conclusaoDate`  | date / null    | Não         | Data de conclusão (`YYYY-MM-DD`).                                       |
 | `status`         | integer        | **Sim**     | Código do status (ver tabela abaixo).                                   |
-| `prioridade`     | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                                               |
+| `prioridade`     | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa.                                               |
 | `servico`        | string / null  | Não         | Nome do serviço.                                                        |
 | `campanha`       | string / null  | Não         | Nome da campanha vinculada.                                             |
 | `descricao`      | string / null  | Não         | Descrição do job.                                                       |
@@ -806,7 +806,7 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs" \
 | `descricao`     | string / null  | Não         | Descrição da tarefa.                           |
 | `inicioDate`    | date / null    | Não         | Data de início da tarefa (`YYYY-MM-DD`).       |
 | `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).          |
-| `prioridade`    | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                      |
+| `prioridade`    | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa.                      |
 | `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.          |
 
 #### Valores de `status`
@@ -973,7 +973,12 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas" \
   -d '{
     "pecaId": 5,
     "titulo": "Banner Instagram",
-    "prioridade": 2
+    "prioridade": 1,
+    "deadline": "2026-12-10",
+    "dataPublicacao": "2026-12-11T09:00",
+    "etapas": [
+      { "ordem": 1, "responsaveisIds": [17] }
+    ]
   }'
 ```
 
@@ -984,7 +989,30 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas" \
 | `pecaId`     | integer        | **Sim**     | ID da peça no catálogo (ver `GET /api/v1/pieces`).                |
 | `titulo`     | string / null  | Não         | Título da peça no job. Se omitido, usa o nome da peça do catálogo. |
 | `descricao`  | string / null  | Não         | Descrição da peça no job. Se omitido, usa a instrução do catálogo. |
-| `prioridade` | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta. Padrão: Média.                          |
+| `prioridade` | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa. Padrão: Média.                          |
+| `deadline`   | string / null  | Não         | Prazo interno da peça: `AAAA-MM-DD` ou `AAAA-MM-DDTHH:mm`, sem fuso (vale o horário da agência). Ao gravar, o fim de cada etapa não concluída passa a ser o deadline menos os dias de entrega da etapa (dias úteis quando a etapa é marcada assim), às 23:59. |
+| `dataPublicacao` | string / null | Não       | Data em que a peça vai ao ar, no mesmo formato. |
+| `etapas`     | array / null   | Não         | Datas e responsáveis de etapas específicas, aplicados depois do recálculo pelo deadline. Ver "Itens de `etapas`". |
+
+#### Itens de `etapas`
+
+| Campo             | Tipo            | Descrição |
+|-------------------|-----------------|-----------|
+| `etapaId`         | integer / null  | ID da etapa, devolvido em `etapas` na resposta. Informe `etapaId` ou `ordem`, um dos dois. Na criação só `ordem` existe. |
+| `ordem`           | integer / null  | Ordem da etapa no workflow (1 = primeira). |
+| `inicio`          | string / null   | Início da etapa. Omitido não altera; texto vazio limpa. |
+| `fim`             | string / null   | Fim da etapa; sem hora vale 23:59. Omitido não altera; texto vazio limpa. |
+| `responsaveisIds` | integer[] / null | IDs dos colaboradores responsáveis. A lista **substitui** os atuais; lista vazia remove todos; omitida não altera. Quem entra recebe a atividade e a notificação de nova atividade. |
+
+Regras (as mesmas da tela da peça):
+
+- Qualquer item recusado recusa a chamada inteira: nada é gravado.
+- Etapa concluída não pode ser alterada. Fim antes do início é recusado.
+- Etapa com freelancer (iFreela), freelancer como responsável e a remoção de quem já apontou tempo na
+  etapa não são aceitos pela API: faça pela tela.
+- Fim depois da data de publicação é gravado e volta um aviso em `warnings`.
+- Com a automação de datas ligada na peça, mudar o fim de uma etapa desloca as etapas seguintes não
+  concluídas pela mesma quantidade de dias.
 
 #### Resposta — 201 Created
 
@@ -994,7 +1022,19 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas" \
   "jobPecaId": 42,
   "pecaId": 5,
   "titulo": "Banner Instagram",
-  "status": 1
+  "status": 1,
+  "etapas": [
+    {
+      "etapaId": 981,
+      "nome": "CRIAÇÃO",
+      "ordem": 1,
+      "inicio": null,
+      "fim": "2026-12-07T23:59:59",
+      "concluida": false,
+      "responsaveis": [{ "id": 17, "nome": "Ana Souza" }]
+    }
+  ],
+  "warnings": []
 }
 ```
 
@@ -1005,6 +1045,8 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas" \
 | `pecaId`    | integer | ID da peça no catálogo                                             |
 | `titulo`    | string  | Título da peça no job                                              |
 | `status`    | integer | Código de status da peça no job                                    |
+| `etapas`    | array   | Etapas do workflow da peça depois da gravação, em ordem: `etapaId`, `nome`, `ordem`, `inicio`, `fim` (`null` quando não definidos), `concluida` e `responsaveis` (`id`, `nome`) |
+| `warnings`  | string[] | Avisos que não impedem a gravação                                  |
 
 #### Erros
 
@@ -1013,6 +1055,7 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas" \
 | 400  | `pecaId` ausente, peça já vinculada a este job |
 | 401  | API Key ausente ou inválida |
 | 404  | Job não encontrado, peça não encontrada no catálogo |
+| 422  | Data em formato inválido ou com fuso, ou item de `etapas` recusado (a mensagem diz qual) |
 
 ---
 
@@ -1035,7 +1078,12 @@ curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas/42" \
   -H "Content-Type: application/json" \
   -d '{
     "titulo": "Banner Instagram — Revisado",
-    "prioridade": 3
+    "prioridade": 0,
+    "deadline": "2026-12-20",
+    "recalcularEtapas": false,
+    "etapas": [
+      { "etapaId": 981, "inicio": "2026-12-01T09:00", "fim": "2026-12-03", "responsaveisIds": [17, 23] }
+    ]
   }'
 ```
 
@@ -1047,7 +1095,14 @@ curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234/pecas/42" \
 | `descricao`  | string / null  | Não         | Descrição da peça no job.                  |
 | `formato`    | string / null  | Não         | Formato da peça.                           |
 | `servico`    | string / null  | Não         | Nome do serviço.                           |
-| `prioridade` | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                  |
+| `prioridade` | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa.                  |
+| `deadline`   | string / null  | Não         | Prazo interno da peça: `AAAA-MM-DD` ou `AAAA-MM-DDTHH:mm`, sem fuso (vale o horário da agência). Ao gravar, o fim de cada etapa não concluída passa a ser o deadline menos os dias de entrega da etapa (dias úteis quando a etapa é marcada assim), às 23:59. Texto vazio limpa a data. |
+| `dataPublicacao` | string / null | Não       | Data em que a peça vai ao ar, no mesmo formato. Texto vazio limpa a data. |
+| `etapas`     | array / null   | Não         | Datas e responsáveis de etapas específicas, aplicados depois do recálculo pelo deadline. Ver "Itens de `etapas`". |
+| `recalcularEtapas` | boolean  | Não         | Com `deadline` novo, recalcula o fim das etapas não concluídas. Padrão: `true`. `false` altera só o deadline e mantém as datas das etapas. |
+
+Os itens de `etapas` e as regras são os mesmos do `POST` (seção 9); aqui a etapa pode ser indicada por
+`etapaId` ou por `ordem`.
 
 ⚠️ Nenhum campo é obrigatório aqui — envie só os que quer alterar; os demais permanecem
 como estavam.
@@ -1060,7 +1115,19 @@ como estavam.
   "jobPecaId": 42,
   "pecaId": 5,
   "titulo": "Banner Instagram — Revisado",
-  "status": 1
+  "status": 1,
+  "etapas": [
+    {
+      "etapaId": 981,
+      "nome": "CRIAÇÃO",
+      "ordem": 1,
+      "inicio": null,
+      "fim": "2026-12-07T23:59:59",
+      "concluida": false,
+      "responsaveis": [{ "id": 17, "nome": "Ana Souza" }]
+    }
+  ],
+  "warnings": []
 }
 ```
 
@@ -1070,6 +1137,7 @@ como estavam.
 |------|---------|
 | 401  | API Key ausente ou inválida |
 | 404  | Job não encontrado, ou `jobPecaId` não pertence a este job |
+| 422  | Data em formato inválido ou com fuso, ou item de `etapas` recusado (a mensagem diz qual) |
 
 ---
 
@@ -1109,7 +1177,7 @@ Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6):
 | `descricao`     | string / null  | Não         | Descrição da tarefa.                           |
 | `inicioDate`    | date / null    | Não         | Data de início da tarefa (`YYYY-MM-DD`).       |
 | `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).          |
-| `prioridade`    | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                      |
+| `prioridade`    | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa.                      |
 | `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.          |
 
 #### Resposta — 201 Created
@@ -1171,7 +1239,7 @@ curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234/tarefas/701" \
 | `descricao`     | string / null  | Não         | Descrição da tarefa.                        |
 | `inicioDate`    | date / null    | Não         | Data de início da tarefa (`YYYY-MM-DD`).    |
 | `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).       |
-| `prioridade`    | integer / null | Não         | 1=Baixa, 2=Média, 3=Alta.                   |
+| `prioridade`    | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa.                   |
 | `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.       |
 
 ⚠️ Nenhum campo é obrigatório aqui — envie só os que quer alterar; os demais permanecem
