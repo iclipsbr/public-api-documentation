@@ -22,6 +22,7 @@ Documentação de referência para integração com a iClips Public API.
   - [POST /api/v1/jobs — Criar projeto (Job)](#6-post-apiv1jobs)
   - [PUT /api/v1/jobs/{id} — Atualizar projeto (Job)](#7-put-apiv1jobsid)
   - [DELETE /api/v1/jobs/{id} — Excluir projeto (Job)](#8-delete-apiv1jobsid)
+  - [GET /api/v1/jobs/{id} — Consultar projeto com peças, etapas e tarefas](#24-get-apiv1jobsid)
   - [POST /api/v1/jobs/{id}/pecas — Vincular peça a um projeto](#9-post-apiv1jobsidpecas)
   - [PUT /api/v1/jobs/{id}/pecas/{jobPecaId} — Atualizar peça de um projeto](#10-put-apiv1jobsidpecasjobpecaid)
   - [POST /api/v1/jobs/{id}/tarefas — Criar tarefa em um projeto](#11-post-apiv1jobsidtarefas)
@@ -1045,7 +1046,7 @@ Regras (as mesmas da tela da peça):
 | `pecaId`    | integer | ID da peça no catálogo                                             |
 | `titulo`    | string  | Título da peça no job                                              |
 | `status`    | integer | Código de status da peça no job                                    |
-| `etapas`    | array   | Etapas do workflow da peça depois da gravação, em ordem: `etapaId`, `nome`, `ordem`, `inicio`, `fim` (`null` quando não definidos), `concluida` e `responsaveis` (`id`, `nome`) |
+| `etapas`    | array   | Etapas do workflow da peça depois da gravação, em ordem: `etapaId`, `nome`, `ordem`, `inicio`, `fim` e `conclusao` (`null` quando não definidos), `concluida`, `aguardandoAprovacaoCliente` e `responsaveis` (`id`, `nome`) |
 | `warnings`  | string[] | Avisos que não impedem a gravação                                  |
 
 #### Erros
@@ -1163,13 +1164,14 @@ curl -X POST "https://public-api.iclips.com.br/api/v1/jobs/1234/tarefas" \
     "inicioDate": "2025-06-02",
     "fimDate": "2025-06-02",
     "prioridade": 1,
-    "ordemExibicao": 1
+    "ordemExibicao": 1,
+    "responsaveisIds": [17, 23]
   }'
 ```
 
 #### Campos do Request Body
 
-Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6):
+Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6), mais `responsaveisIds`:
 
 | Campo           | Tipo           | Obrigatório | Descrição                                    |
 |-----------------|----------------|-------------|-----------------------------------------------|
@@ -1179,6 +1181,7 @@ Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6):
 | `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).          |
 | `prioridade`    | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa.                      |
 | `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.          |
+| `responsaveisIds` | integer[] / null | Não       | IDs dos colaboradores responsáveis pela tarefa. Veja [Responsáveis da tarefa](#responsáveis-da-tarefa). |
 
 #### Resposta — 201 Created
 
@@ -1187,7 +1190,12 @@ Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6):
   "jobId": 1234,
   "idTarefaJob": 701,
   "titulo": "Reunião de briefing",
-  "status": 0
+  "status": 1,
+  "responsaveis": [
+    { "id": 17, "nome": "Ana Souza" },
+    { "id": 23, "nome": "Bruno Lima" }
+  ],
+  "warnings": []
 }
 ```
 
@@ -1197,6 +1205,8 @@ Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6):
 | `idTarefaJob` | integer | ID da tarefa criada — use este id no `PUT` |
 | `titulo`      | string  | Título da tarefa       |
 | `status`      | integer | Código de status da tarefa |
+| `responsaveis` | array  | Responsáveis da tarefa depois da gravação (`id`, `nome`) |
+| `warnings`    | string[] | Avisos que não impedem a gravação |
 
 #### Erros
 
@@ -1205,6 +1215,7 @@ Mesmos campos de `tarefasInput[]` do `POST /api/v1/jobs` (seção 6):
 | 400  | `titulo` vazio ou ausente |
 | 401  | API Key ausente ou inválida |
 | 404  | Job não encontrado |
+| 422  | Responsável recusado (veja [Responsáveis da tarefa](#responsáveis-da-tarefa)); nada é gravado |
 
 ---
 
@@ -1241,9 +1252,22 @@ curl -X PUT "https://public-api.iclips.com.br/api/v1/jobs/1234/tarefas/701" \
 | `fimDate`       | date / null    | Não         | Data de fim da tarefa (`YYYY-MM-DD`).       |
 | `prioridade`    | integer / null | Não         | 0=Alta, 1=Média, 2=Baixa.                   |
 | `ordemExibicao` | integer / null | Não         | Ordem de exibição da tarefa na lista.       |
+| `responsaveisIds` | integer[] / null | Não       | IDs dos colaboradores responsáveis pela tarefa. Veja [Responsáveis da tarefa](#responsáveis-da-tarefa). |
 
 ⚠️ Nenhum campo é obrigatório aqui — envie só os que quer alterar; os demais permanecem
 como estavam.
+
+#### Responsáveis da tarefa
+
+- A lista enviada **substitui** os responsáveis atuais. Lista vazia (`[]`) remove todos. Sem o campo
+  (ou `null`), os responsáveis não mudam.
+- Quem entra recebe a atividade na tarefa e, se a tarefa já tem data, a notificação de nova atividade.
+- Quem sai sem tempo apontado perde a atividade. Quem sai com tempo apontado tem a atividade
+  concluída, e o tempo continua nos relatórios de horas.
+- Se todos os responsáveis que ficam já tinham concluído, a tarefa é concluída. A resposta avisa em
+  `warnings`.
+- São recusados com **422**, sem gravar nada: colaborador inexistente ou inativo (a mensagem traz o
+  ID), freelancer (iFreela), tarefa que já tem freelancer e tarefa concluída.
 
 #### Resposta — 200 OK
 
@@ -1252,7 +1276,11 @@ como estavam.
   "jobId": 1234,
   "idTarefaJob": 701,
   "titulo": "Reunião de briefing — Remarcada",
-  "status": 0
+  "status": 1,
+  "responsaveis": [
+    { "id": 17, "nome": "Ana Souza" }
+  ],
+  "warnings": []
 }
 ```
 
@@ -1263,6 +1291,7 @@ como estavam.
 | 400  | `titulo` enviado vazio |
 | 401  | API Key ausente ou inválida |
 | 404  | Job não encontrado, ou `tarefaId` não pertence a este job |
+| 422  | Responsável recusado; nada é gravado |
 
 ---
 
@@ -1782,6 +1811,112 @@ curl -X GET "https://public-api.iclips.com.br/api/v1/projetos?dataInicio=2025-01
 | 400  | `dataInicio` ou `dataFim` ausentes, `dataInicio` > `dataFim`, intervalo > 31 dias |
 | 401  | API Key ausente ou inválida                                                    |
 | 429  | Limite de taxa excedido (10 req/min). Header `Retry-After` indica segundos restantes. |
+
+---
+
+### 24. GET /api/v1/jobs/{id}
+
+Consulta um Job (Projeto) pelo ID, com as peças, as etapas de cada peça e as tarefas. Devolve os IDs
+usados nas escritas: `jobPecaId` (seção 10), `etapaId` (campo `etapas` das seções 9 e 10) e o `id` da
+tarefa (seção 12). Vale para projeto de qualquer status, inclusive finalizado e cancelado.
+
+#### Parâmetros de rota
+
+| Parâmetro | Tipo    | Obrigatório | Descrição            |
+|-----------|---------|-------------|----------------------|
+| `id`      | integer | **Sim**     | Identificador do job |
+
+#### Exemplo de requisição
+
+```bash
+curl "https://public-api.iclips.com.br/api/v1/jobs/1234" \
+  -H "X-Api-Key: <SUA_API_KEY>"
+```
+
+#### Resposta — 200 OK
+
+```json
+{
+  "id": 1234,
+  "titulo": "Campanha de Natal",
+  "sigla": "ABC-0012/26",
+  "clienteId": 55,
+  "cliente": "Cliente Exemplo",
+  "status": 6,
+  "statusNome": "Autorizado",
+  "prioridade": 1,
+  "entrada": "2026-11-03T00:00:00",
+  "conclusaoPrevista": "2026-12-20T00:00:00",
+  "atendimento": { "id": 9, "nome": "Carla Dias" },
+  "pecas": [
+    {
+      "jobPecaId": 8901,
+      "pecaId": 5,
+      "titulo": "Post de Natal",
+      "status": -1,
+      "deadline": "2026-12-10T18:00:00",
+      "dataPublicacao": "2026-12-11T09:00:00",
+      "etapas": [
+        {
+          "etapaId": 981,
+          "nome": "CRIAÇÃO",
+          "ordem": 1,
+          "inicio": "2026-12-01T09:00:00",
+          "fim": "2026-12-03T23:59:00",
+          "conclusao": "2026-12-03T16:20:00",
+          "concluida": true,
+          "aguardandoAprovacaoCliente": false,
+          "responsaveis": [{ "id": 17, "nome": "Ana Souza" }]
+        },
+        {
+          "etapaId": 982,
+          "nome": "APROVAÇÃO DO CLIENTE",
+          "ordem": 2,
+          "inicio": null,
+          "fim": "2026-12-08T23:59:00",
+          "conclusao": null,
+          "concluida": false,
+          "aguardandoAprovacaoCliente": true,
+          "responsaveis": []
+        }
+      ]
+    }
+  ],
+  "tarefas": [
+    {
+      "id": 701,
+      "titulo": "Reunião de briefing",
+      "inicio": "2026-11-05T00:00:00",
+      "fim": "2026-11-05T00:00:00",
+      "conclusao": null,
+      "concluida": false,
+      "prioridade": 1,
+      "responsaveis": [{ "id": 23, "nome": "Bruno Lima" }]
+    }
+  ]
+}
+```
+
+| Campo | Descrição |
+|-------|-----------|
+| `status`, `statusNome` | Código e nome do status do projeto (os códigos da seção 7) |
+| `prioridade` | 0=Alta, 1=Média, 2=Baixa |
+| `atendimento` | Responsável pelo projeto (`id`, `nome`); `null` quando não há |
+| `pecas[].jobPecaId` | ID da peça no projeto, o mesmo do `PUT .../pecas/{jobPecaId}` |
+| `pecas[].deadline`, `pecas[].dataPublicacao` | Prazo interno e data em que a peça vai ao ar |
+| `pecas[].etapas[]` | Etapas do workflow, em ordem, no mesmo formato da resposta das seções 9 e 10 |
+| `etapas[].aguardandoAprovacaoCliente` | `true` na etapa de aprovação do cliente que ainda está aberta |
+| `tarefas[].id` | ID da tarefa, o mesmo do `PUT .../tarefas/{tarefaId}` |
+| `tarefas[].concluida` | `true` quando a tarefa tem data de conclusão |
+
+Datas não preenchidas voltam `null`.
+
+#### Erros
+
+| HTTP | Cenário |
+|------|---------|
+| 401  | API Key ausente ou inválida |
+| 404  | Job não encontrado (a mesma resposta para job de outra agência) |
 
 ---
 
